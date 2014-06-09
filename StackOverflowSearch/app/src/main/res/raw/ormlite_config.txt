@@ -1,0 +1,42 @@
+#
+# generated on 2014/06/09 12:57:16
+#
+# --table-start--
+dataClass=com.example.stackoverflowsearch.app.QueryData
+tableName=querydata
+# --table-fields-start--
+# --field-start--
+fieldName=id
+generatedId=true
+# --field-end--
+# --field-start--
+fieldName=query
+# --field-end--
+# --table-fields-end--
+# --table-end--
+#################################
+# --table-start--
+dataClass=com.example.stackoverflowsearch.app.QuestionData
+tableName=questions
+# --table-fields-start--
+# --field-start--
+fieldName=question_id
+id=true
+# --field-end--
+# --field-start--
+fieldName=query_id
+canBeNull=false
+foreign=true
+# --field-end--
+# --field-start--
+fieldName=score
+# --field-end--
+# --field-start--
+fieldName=author
+# --field-end--
+# --field-start--
+fieldName=title
+# --field-end--
+# --table-fields-end--
+# --table-end--
+#################################
