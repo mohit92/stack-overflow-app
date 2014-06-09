@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="debug">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/StackOverflowSearch/app/build/pre-dexed/debug/support-v4-19.1.0-b49a0e045a06e6ae5f72528e9dd57243d49258ff.jar!/" />
+      <root url="jar://$PROJECT_DIR$/StackOverflowSearch/app/build/pre-dexed/debug/classes-c44f2c172930fac18f8ab59120ef351727ed0e6d.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
