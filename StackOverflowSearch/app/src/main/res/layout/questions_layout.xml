@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+    <TextView
+        android:layout_width="60dp"
+        android:layout_height="100dp"
+        android:id="@+id/scoreTextView"
+        android:gravity="center"
+        android:text="@string/score"
+        android:textSize="25dp"></TextView>
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:layout_toRightOf="@+id/scoreTextView"
+        android:id="@+id/titleTextView"
+        android:text="@string/title"
+        android:gravity="center|start"
+        android:textSize="18dp"/>
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="20dp"
+        android:layout_below="@+id/titleTextView"
+        android:layout_toRightOf="@+id/scoreTextView"
+        android:id="@+id/authorTextView"
+        android:text="@string/author"
+        />
+
+
+</RelativeLayout>
