@@ -1,15 +1,25 @@
 package com.example.stackoverflowsearch.app;
 
+import android.app.Activity;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.TextView;
+
+import java.util.List;
+
 /**
  * Created by mohit on 6/8/14.
  */
-/*
+
 public class CustomAdapter extends ArrayAdapter {
 
     private final Activity activity;
     private final List list;
-
-    public CustomAdapter(Activity activity, ArrayList<Question> list){
+    //private Context context;
+    public CustomAdapter(Activity activity, List<QuestionData> list){
+        super(activity,R.layout.questions_layout,list);
         this.activity = activity;
         this.list = list;
     }
@@ -33,10 +43,11 @@ public class CustomAdapter extends ArrayAdapter {
             viewHolder = (ViewHolder)rowView.getTag();
         }
 
-        Question item = list.get(position);
-        viewHolder.score.setText(item.getScore().toString());
+        QuestionData item = (QuestionData) list.get(position);
+        viewHolder.score.setText((Integer.toString(item.getScore())));
         viewHolder.title.setText(item.getTitle().toString());
         viewHolder.author.setText(item.getAuthor().toString());
+        return rowView;
     }
 
     static class ViewHolder {
@@ -45,4 +56,3 @@ public class CustomAdapter extends ArrayAdapter {
         TextView author;
     }
 }
-*/

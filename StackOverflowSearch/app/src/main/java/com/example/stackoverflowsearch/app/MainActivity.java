@@ -1,6 +1,5 @@
 package com.example.stackoverflowsearch.app;
 
-import android.app.Activity;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
@@ -9,6 +8,11 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ListView;
+
+import com.j256.ormlite.android.apptools.OrmLiteBaseActivity;
+import com.j256.ormlite.dao.RuntimeExceptionDao;
+import com.j256.ormlite.stmt.QueryBuilder;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -19,9 +23,11 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.sql.SQLException;
+import java.util.List;
 
 
-public class MainActivity extends Activity {
+public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
 
     private EditText queryEditText;
     private Button searchButton;
@@ -35,6 +41,13 @@ public class MainActivity extends Activity {
     private static final String TITLE = "title";
     private static final String QUESTION_ID = "question_id";
     JSONObject queryResult = null;
+
+    private String author;
+    private String title;
+    private int query_id;
+    private int question_id;
+    private int score;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -49,9 +62,9 @@ public class MainActivity extends Activity {
     View.OnClickListener getQueryURL = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
-            query = queryEditText.getText().toString();
+        query = queryEditText.getText().toString();
 
-            try {
+        try {
                 queryURL = commonURL + URLEncoder.encode(query, "UTF-8");
 
             } catch (UnsupportedEncodingException e) {
@@ -62,31 +75,6 @@ public class MainActivity extends Activity {
         }
     };
 
-    public void getJSONData(String json)
-    {
-            try {
-                //
-                //
-                queryResult = new JSONObject(json);
-                JSONArray questions =  queryResult.getJSONArray("items");
-                for(int i=0;i<questions.length();i++) {
-
-                    JSONObject c = questions.getJSONObject(i);
-                    JSONObject owner = c.getJSONObject("owner");
-                    Log.d("title",c.getString(TITLE));
-                    Log.d("score",c.getString(SCORE));
-                    Log.d("name",owner.getString(AUTHOR));
-                    Log.d("question id",c.getString(QUESTION_ID));
-
-                }
-
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-
-
-
-    }
 
     class JSONParserAsyncTask extends AsyncTask<String,String,Void>
     {
@@ -110,7 +98,7 @@ public class MainActivity extends Activity {
                     Log.d("line", stringBuilder.toString());
 
                 json=stringBuilder.toString();
-                getJSONData(json);
+                feedIntoDb(json);
 
             }
             catch (Exception e ) {
@@ -126,6 +114,94 @@ public class MainActivity extends Activity {
                 e.printStackTrace();
             }
         }
+    }
+
+    public void feedIntoDb(String json)
+    {
+        try {
+                RuntimeExceptionDao<QueryData,Integer> queryDao = getHelper().getQueryRuntimeDao();
+                final RuntimeExceptionDao<QuestionData,Integer> questionDao = getHelper().getQuestionRuntimeDao();
+
+                final QueryData queryData = new QueryData(query);
+                queryDao.create(queryData);
+
+                queryResult = new JSONObject(json);
+                JSONArray questions =  queryResult.getJSONArray("items");
+                for(int i=0;i<questions.length();i++) {
+
+                    JSONObject c = questions.getJSONObject(i);
+                    JSONObject owner = c.getJSONObject("owner");
+                    title=c.getString(TITLE);
+                    score=Integer.parseInt(c.getString(SCORE));
+                    author=owner.getString(AUTHOR);
+                    question_id=Integer.parseInt(c.getString(QUESTION_ID));
+
+                    QuestionData questionData = new QuestionData(question_id, queryData, score, author, title);
+                    questionDao.create(questionData);
+
+
+
+                }
+
+
+            QueryBuilder<QuestionData, Integer> statementBuilder = questionDao.queryBuilder();
+            statementBuilder.where().eq(QuestionData.QUERY_ID_FIELD_NAME, queryData);
+            final List<QuestionData> list = questionDao.query(statementBuilder.prepare());
+
+            displayQueryResults(list);
+
+
+
+            /*List<QuestionData> list = questionDao.queryForAll();
+            StringBuilder sb = new StringBuilder();
+            sb.append("got ").append(list.size()).append(" entries in ").append("Question").append("\n");
+
+            // if we already have items in the database
+            int questionC = 0;
+            for (QuestionData question : list) {
+                sb.append("------------------------------------------\n");
+                sb.append("[").append(questionC).append("] = ").append(question.getQuestionId()+"  "+question.getScore()+"   "+question.getQueryId()+"  "+question.getQueryId() + "   "+question.getTitle()).append("\n");
+                questionC++;
+            }
+            sb.append("------------------------------------------\n");
+            Log.d("fetch",sb.toString());
+
+            List<QueryData> queryList = queryDao.queryForAll();
+            StringBuilder qsb = new StringBuilder();
+            qsb.append("got ").append(queryList.size()).append(" entries in ").append("Queries").append("\n");
+
+            // if we already have items in the database
+            int queryC = 0;
+            for (QueryData queries : queryList) {
+                qsb.append("------------------------------------------\n");
+                qsb.append("[").append(queryC).append("] = ").append(queries.getId()+"  "+queries.getQuery()).append("\n");
+                queryC++;
+            }
+            qsb.append("------------------------------------------\n");
+            Log.d("fetch",qsb.toString());
+
+        */
+
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    public void displayQueryResults(List<QuestionData> list ) {
+
+        final ListView listView = (ListView) findViewById(R.id.questionListView);
+        final CustomAdapter customAdapter = new CustomAdapter(MainActivity.this,list);
+        MainActivity.this.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+
+                listView.setAdapter(customAdapter);
+            }
+        });
     }
 
     @Override

@@ -12,7 +12,7 @@ public class QueryData {
     @DatabaseField(generatedId = true)
     private int id;
 
-    @DatabaseField
+    @DatabaseField()
     private String query;
 
     QueryData() {
@@ -33,4 +33,6 @@ public class QueryData {
     public int getId() {
         return id;
     }
+
+
 }

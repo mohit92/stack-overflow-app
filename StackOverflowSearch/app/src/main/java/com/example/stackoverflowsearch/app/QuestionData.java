@@ -9,11 +9,15 @@ import com.j256.ormlite.table.DatabaseTable;
 @DatabaseTable(tableName = "questions")
 
 public class QuestionData {
+    public static final String QUERY_ID_FIELD_NAME = "query_id_id";
 
-    @DatabaseField(id = true )
+    @DatabaseField(generatedId = true)
+    private int id;
+
+    @DatabaseField
     private int question_id;
 
-    @DatabaseField(canBeNull = false, foreign = true)
+    @DatabaseField(canBeNull = false, foreign = true, columnName =QUERY_ID_FIELD_NAME )
     private QueryData query_id;
 
     @DatabaseField

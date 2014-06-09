@@ -78,4 +78,12 @@ public class DatabaseHelper extends OrmLiteSqliteOpenHelper {
         }
         return questionRuntimeDao;
     }
+
+    public void close() {
+        super.close();
+        queryDao=null;
+        questionDao=null;
+        queryRuntimeDao=null;
+        questionRuntimeDao=null;
+    }
 }
