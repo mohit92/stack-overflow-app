@@ -27,6 +27,7 @@
         android:layout_toRightOf="@+id/scoreTextView"
         android:id="@+id/authorTextView"
         android:text="@string/author"
+        android:gravity="end"
         />
 
 

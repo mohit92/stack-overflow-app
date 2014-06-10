@@ -8,12 +8,16 @@ import com.j256.ormlite.table.DatabaseTable;
  */
 @DatabaseTable
 public class QueryData {
+    public static final String QUERY_FIELD_NAME="query";
+    public static final String ID_FIELD_NAME="id";
 
     @DatabaseField(generatedId = true)
     private int id;
 
     @DatabaseField()
     private String query;
+
+
 
     QueryData() {
 

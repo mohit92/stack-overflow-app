@@ -14,10 +14,10 @@ public class QuestionData {
     @DatabaseField(generatedId = true)
     private int id;
 
-    @DatabaseField
+    @DatabaseField(id = false)
     private int question_id;
 
-    @DatabaseField(canBeNull = false, foreign = true, columnName =QUERY_ID_FIELD_NAME )
+    @DatabaseField(canBeNull = false, foreign = true, columnName = QUERY_ID_FIELD_NAME)
     private QueryData query_id;
 
     @DatabaseField
@@ -41,6 +41,7 @@ public class QuestionData {
         this.title = title;
     }
 
+    public int getId() {return id;}
     public void setQuestionId(int question_id) {
         this.question_id=question_id;
     }

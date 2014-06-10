@@ -1,17 +1,20 @@
 package com.example.stackoverflowsearch.app;
 
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import com.j256.ormlite.android.apptools.OrmLiteBaseActivity;
 import com.j256.ormlite.dao.RuntimeExceptionDao;
+import com.j256.ormlite.stmt.DeleteBuilder;
 import com.j256.ormlite.stmt.QueryBuilder;
 
 import org.json.JSONArray;
@@ -48,10 +51,17 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
     private int question_id;
     private int score;
 
+    private RuntimeExceptionDao<QueryData,Integer> queryDao;
+    private RuntimeExceptionDao<QuestionData,Integer> questionDao;
+
+    private ListView listView;
+    private CustomAdapter customAdapter;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
 
         queryEditText = (EditText) findViewById(R.id.queryEditText);
         searchButton =(Button) findViewById(R.id.searchButton);
@@ -62,20 +72,96 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
     View.OnClickListener getQueryURL = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
-        query = queryEditText.getText().toString();
+            query = queryEditText.getText().toString();
+            if (query != null && !query.isEmpty()) {
 
-        try {
-                queryURL = commonURL + URLEncoder.encode(query, "UTF-8");
+                try {
+                    queryURL = commonURL + URLEncoder.encode(query, "UTF-8");
 
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                }
+
+                if (isNetworkAvailable()) {
+
+                    try {
+                        //delete older entries for the same query from the database
+                        deleteOlderQueryResults(query);
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
+
+                    //feed new questions parsed from internet in the database
+                    new JSONParserAsyncTask().execute(queryURL);
+                } else {
+
+                    try {
+                        offlineResultsInDatabase(query);
+
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
+
+                }
             }
-
-            new JSONParserAsyncTask().execute(queryURL);
+            else {
+                showToast("query can not be empty");
+            }
         }
+
     };
 
+    private void offlineResultsInDatabase(String query) throws SQLException {
+        queryDao = getHelper().getQueryRuntimeDao();
+        questionDao = getHelper().getQuestionRuntimeDao();
 
+        //find the query_id in QueryData for the user inputted query
+        QueryBuilder<QueryData,Integer> queryQb = queryDao.queryBuilder();
+        List<QueryData> resultQueryDataList=queryQb.where().like(QueryData.QUERY_FIELD_NAME,"%"+query+"%").query();
+
+        if(resultQueryDataList.isEmpty()) {
+            showToast("No offline results in database");
+        }
+        else {
+            //store questions corresponding to query_id
+            QueryBuilder<QuestionData,Integer> questionQb = questionDao.queryBuilder();
+            List<QuestionData> questionResults = questionQb.join(queryQb).query();
+            displayQueryResults(questionResults);
+
+
+        }
+
+
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+        return networkInfo!=null && networkInfo.isConnected();
+    }
+
+    private void deleteOlderQueryResults(String query) throws SQLException {
+
+        queryDao = getHelper().getQueryRuntimeDao();
+        questionDao = getHelper().getQuestionRuntimeDao();
+
+        //find query_id in QueryData for the query
+        QueryBuilder<QueryData,Integer> queryQb = queryDao.queryBuilder();
+        queryQb.where().eq(QueryData.QUERY_FIELD_NAME,query);
+
+        //delete all the questions in QuestionData corresponding to query_id
+        DeleteBuilder<QuestionData,Integer> questionDb = questionDao.deleteBuilder();
+        questionDb.where().in(QuestionData.QUERY_ID_FIELD_NAME,queryQb.query());
+        questionDb.delete();
+
+        //delete query from the QueryData
+        DeleteBuilder<QueryData,Integer> queryDb = queryDao.deleteBuilder();
+        queryDb.where().eq(QueryData.QUERY_FIELD_NAME,query);
+        queryDb.delete();
+
+
+
+    }
     class JSONParserAsyncTask extends AsyncTask<String,String,Void>
     {
         JSONObject jsonObject;
@@ -119,9 +205,9 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
     public void feedIntoDb(String json)
     {
         try {
-                RuntimeExceptionDao<QueryData,Integer> queryDao = getHelper().getQueryRuntimeDao();
-                final RuntimeExceptionDao<QuestionData,Integer> questionDao = getHelper().getQuestionRuntimeDao();
 
+                queryDao = getHelper().getQueryRuntimeDao();
+                questionDao = getHelper().getQuestionRuntimeDao();
                 final QueryData queryData = new QueryData(query);
                 queryDao.create(queryData);
 
@@ -152,15 +238,15 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
 
 
 
-            /*List<QuestionData> list = questionDao.queryForAll();
+            List<QuestionData> qlist = questionDao.queryForAll();
             StringBuilder sb = new StringBuilder();
-            sb.append("got ").append(list.size()).append(" entries in ").append("Question").append("\n");
+            sb.append("got ").append(qlist.size()).append(" entries in ").append("Question").append("\n");
 
             // if we already have items in the database
             int questionC = 0;
-            for (QuestionData question : list) {
+            for (QuestionData question : qlist) {
                 sb.append("------------------------------------------\n");
-                sb.append("[").append(questionC).append("] = ").append(question.getQuestionId()+"  "+question.getScore()+"   "+question.getQueryId()+"  "+question.getQueryId() + "   "+question.getTitle()).append("\n");
+                sb.append("[").append(questionC).append("] = ").append(question.getId()+"   "+question.getQuestionId()+"  "+question.getScore()+"    "+question.getQueryId().getId() + "   "+question.getTitle()).append("\n");
                 questionC++;
             }
             sb.append("------------------------------------------\n");
@@ -180,7 +266,7 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
             qsb.append("------------------------------------------\n");
             Log.d("fetch",qsb.toString());
 
-        */
+
 
 
         } catch (JSONException e) {
@@ -193,8 +279,8 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
 
     public void displayQueryResults(List<QuestionData> list ) {
 
-        final ListView listView = (ListView) findViewById(R.id.questionListView);
-        final CustomAdapter customAdapter = new CustomAdapter(MainActivity.this,list);
+        listView = (ListView) findViewById(R.id.questionListView);
+        customAdapter = new CustomAdapter(MainActivity.this,list);
         MainActivity.this.runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -204,24 +290,10 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
         });
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.main, menu);
-        return true;
+    private void showToast(String string) {
+        Toast.makeText(getApplicationContext(), string, Toast.LENGTH_LONG).show();
     }
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-        if (id == R.id.action_settings) {
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
+
 
 }

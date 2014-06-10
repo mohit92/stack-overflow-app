@@ -16,7 +16,7 @@ import java.sql.SQLException;
  */
 public class DatabaseHelper extends OrmLiteSqliteOpenHelper {
 
-    private static final String DATABASE_NAME = "querySearch.db";
+    private static final String DATABASE_NAME = "stackQuerySearch.db";
 
     private static final int DATABASE_VERSION = 1;
 
@@ -34,6 +34,7 @@ public class DatabaseHelper extends OrmLiteSqliteOpenHelper {
         try {
             TableUtils.createTable(connectionSource,QueryData.class);
             TableUtils.createTable(connectionSource,QuestionData.class);
+
         }
         catch (SQLException e) {
             throw new RuntimeException(e);
@@ -45,9 +46,17 @@ public class DatabaseHelper extends OrmLiteSqliteOpenHelper {
         try {
             TableUtils.dropTable(connectionSource,QueryData.class,true);
             TableUtils.dropTable(connectionSource,QuestionData.class,true);
+
         }
         catch (SQLException e) {
             throw new RuntimeException(e);
+        }
+    }
+    @Override
+    public void onOpen(SQLiteDatabase sqLiteDatabase) {
+        super.onOpen(sqLiteDatabase);
+        if(!sqLiteDatabase.isReadOnly()) {
+            sqLiteDatabase.execSQL("PRAGMA foreign_keys=ON;");
         }
     }
 
