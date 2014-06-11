@@ -5,9 +5,11 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Parcelable;
 import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.AbsListView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -50,9 +52,13 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
 
     private String author;
     private String title;
-    private int query_id;
     private int question_id;
     private int score;
+
+    private int pageSize=10;
+    private int pageNo=1;
+    private boolean loading = true;
+    private int previousTotal = 0;
 
     private RuntimeExceptionDao<QueryData,Integer> queryDao;
     private RuntimeExceptionDao<QuestionData,Integer> questionDao;
@@ -60,13 +66,13 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
     private ListView listView;
     private CustomAdapter customAdapter;
 
-
+    boolean newQuery = true;            //to check for pagination
 
     private ProgressBar progressBar;
+    Parcelable state;   //to store the scrollbar position
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -84,13 +90,18 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
         public void onClick(View v) {
 
             hideKeyBoard();
+            newQuery=true;
+            pageSize=10;
+            loading=true;
+            previousTotal=0;
+            pageNo=1;
+            resetListView();
             query = queryEditText.getText().toString();
-
             if (query != null && !query.isEmpty()) {
 
                 try {
-                    queryURL = commonURL +"&intitle="+URLEncoder.encode(query, "UTF-8");
-
+                    queryURL = commonURL +"&page="+pageNo+"&pagesize="+pageSize+"&intitle="+URLEncoder.encode(query, "UTF-8");
+                    pageSize=5;
 
                 }
                 catch (UnsupportedEncodingException e) {
@@ -101,7 +112,8 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
 
                     try {
                         //delete older entries for the same query from the database
-                        deleteOlderQueryResults(query);
+                        if(newQuery)
+                            deleteOlderQueryResults(query);
                     }
                     catch (SQLException e) {
                         e.printStackTrace();
@@ -149,6 +161,8 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
             List<QuestionData> questionResults = questionQb.join(queryQb).query();
             displayQueryResults(questionResults);
         }
+
+
     }
 
     private boolean isNetworkAvailable() {
@@ -176,15 +190,12 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
         queryDb.where().eq(QueryData.QUERY_FIELD_NAME,query);
         queryDb.delete();
 
-
-
     }
 
 
 
     class JSONParserAsyncTask extends AsyncTask<String,String,Void>
     {
-
         LinearLayout linearLayout = (LinearLayout) findViewById(R.id.llProgressBar);
         JSONObject jsonObject;
         String json = "";
@@ -206,7 +217,7 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
                 while ((read = bufferedReader.read(chars)) != -1)
                     stringBuilder.append(chars, 0, read);
 
-                    Log.d("line", stringBuilder.toString());
+                Log.d("line", stringBuilder.toString());
 
                 json=stringBuilder.toString();
                 feedIntoDb(json);
@@ -219,52 +230,63 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
         }
 
         protected void onPostExecute(Void v){
-
-            linearLayout.setVisibility(View.INVISIBLE);
-
+            try{
+                linearLayout.setVisibility(View.INVISIBLE);
+                jsonObject = new JSONObject(json);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
         }
     }
 
     public void feedIntoDb(String json)
     {
         try {
-                queryResult = new JSONObject(json);
-                JSONArray questions =  queryResult.getJSONArray("items");
+            queryResult = new JSONObject(json);
+            JSONArray questions =  queryResult.getJSONArray("items");
 
-                if(questions.length()>0) {
+            if(questions.length()>0) {
 
-                    queryDao = getHelper().getQueryRuntimeDao();
-                    questionDao = getHelper().getQuestionRuntimeDao();
-                    QueryData queryData;
-
+                queryDao = getHelper().getQueryRuntimeDao();
+                questionDao = getHelper().getQuestionRuntimeDao();
+                QueryData queryData;
+                if(newQuery){
                     queryData = new QueryData(query);
                     queryDao.create(queryData);
-
-
-                    for (int i = 0; i < questions.length(); i++) {
-
-                        JSONObject c = questions.getJSONObject(i);
-                        JSONObject owner = c.getJSONObject("owner");
-                        title = c.getString(TITLE);
-                        score = Integer.parseInt(c.getString(SCORE));
-                        author = owner.getString(AUTHOR);
-                        question_id = Integer.parseInt(c.getString(QUESTION_ID));
-
-                        QuestionData questionData = new QuestionData(question_id, queryData, score, author, title);
-                        questionDao.create(questionData);
-                    }
-
-                    QueryBuilder<QuestionData, Integer> statementBuilder = questionDao.queryBuilder();
-                    statementBuilder.where().eq(QuestionData.QUERY_ID_FIELD_NAME, queryData);
-                    List<QuestionData> list = questionDao.query(statementBuilder.prepare());
-
-                    displayQueryResults(list);
                 }
                 else {
-
-                    resetListView();
-                    showToast("No results found, please enter a relevent query");
+                    QueryBuilder<QueryData,Integer> queryQb = queryDao.queryBuilder();
+                    queryData  =queryQb.where().eq(QueryData.QUERY_FIELD_NAME, query).queryForFirst();
                 }
+
+                for (int i = 0; i < questions.length(); i++) {
+
+                    JSONObject c = questions.getJSONObject(i);
+                    JSONObject owner = c.getJSONObject("owner");
+                    title = c.getString(TITLE);
+                    score = Integer.parseInt(c.getString(SCORE));
+                    author = owner.getString(AUTHOR);
+                    question_id = Integer.parseInt(c.getString(QUESTION_ID));
+
+                    QuestionData questionData = new QuestionData(question_id, queryData, score, author, title);
+                    questionDao.create(questionData);
+
+                }
+
+                QueryBuilder<QuestionData, Integer> statementBuilder = questionDao.queryBuilder();
+                statementBuilder.where().eq(QuestionData.QUERY_ID_FIELD_NAME, queryData);
+                List<QuestionData> list = questionDao.query(statementBuilder.prepare());
+
+                displayQueryResults(list);
+            }
+            else if(!newQuery) {
+                showToast("No more Results to show");
+            }
+            else {
+
+                resetListView();
+                showToast("No results found, please enter a relevent query");
+            }
 
         }
         catch (JSONException e) {
@@ -276,16 +298,57 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
 
     }
 
-    public void displayQueryResults(List<QuestionData> list ) {
+    public void displayQueryResults(final List<QuestionData> list ) {
 
         listView = (ListView) findViewById(R.id.questionListView);
         customAdapter = new CustomAdapter(MainActivity.this,list);
+
         MainActivity.this.runOnUiThread(new Runnable() {
             @Override
             public void run() {
 
                 listView.setAdapter(customAdapter);
+                if(!newQuery)
+                listView.onRestoreInstanceState(state);
 
+            }
+        });
+        listView.setOnScrollListener(new AbsListView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(AbsListView view, int scrollState) {
+
+            }
+
+            @Override
+            public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+                if(loading) {
+                    if(totalItemCount>previousTotal) {
+                        loading=false;
+                        previousTotal=totalItemCount;
+                        pageNo++;
+                        if(pageNo==2) //since the pagesize is 5 instead of 10 now , so 2nd page will return 6th entry an we want 11th
+                            pageNo=3;
+                    }
+                }
+                if(!loading && (totalItemCount-visibleItemCount)<=firstVisibleItem) {
+                    try {
+                        updateQueryURL();
+                        newQuery=false;
+                        loading=true;
+                        state = listView.onSaveInstanceState();
+                        if(isNetworkAvailable()) {
+                            new JSONParserAsyncTask().execute(queryURL);
+                        }
+                        else
+                        {
+                            showToast("No internet connection, can't fetch more results");
+                        }
+
+                    }
+                    catch (UnsupportedEncodingException e) {
+                        e.printStackTrace();
+                    }
+                }
             }
         });
     }
@@ -317,9 +380,7 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
         imm.hideSoftInputFromWindow(queryEditText.getWindowToken(), 0);
     }
 
-    /*private void updateQueryURL() throws UnsupportedEncodingException {
+    private void updateQueryURL() throws UnsupportedEncodingException {
         queryURL = commonURL +"&page="+pageNo+"&pagesize="+pageSize+"&intitle="+URLEncoder.encode(query, "UTF-8");
     }
-*/
-
 }
