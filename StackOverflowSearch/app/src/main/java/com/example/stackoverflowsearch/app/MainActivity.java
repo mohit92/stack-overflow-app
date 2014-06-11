@@ -7,9 +7,12 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import com.j256.ormlite.android.apptools.OrmLiteBaseActivity;
@@ -30,11 +33,11 @@ import java.sql.SQLException;
 import java.util.List;
 
 
-public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
+public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper>  {
 
     private EditText queryEditText;
     private Button searchButton;
-    private String commonURL="http://api.stackexchange.com/2.2/search/?order=desc&sort=votes&filter=default&site=stackoverflow&intitle=";
+    private String commonURL="http://api.stackexchange.com/2.2/search/?order=desc&sort=votes&filter=default&site=stackoverflow";
     private String query;
 
     private String queryURL;
@@ -57,12 +60,17 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
     private ListView listView;
     private CustomAdapter customAdapter;
 
+
+
+    private ProgressBar progressBar;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-
+        progressBar = (ProgressBar) findViewById(R.id.progressBar);
         queryEditText = (EditText) findViewById(R.id.queryEditText);
         searchButton =(Button) findViewById(R.id.searchButton);
         searchButton.setOnClickListener(getQueryURL);
@@ -70,15 +78,22 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
     }
 
     View.OnClickListener getQueryURL = new View.OnClickListener() {
+
+
         @Override
         public void onClick(View v) {
+
+            hideKeyBoard();
             query = queryEditText.getText().toString();
+
             if (query != null && !query.isEmpty()) {
 
                 try {
-                    queryURL = commonURL + URLEncoder.encode(query, "UTF-8");
+                    queryURL = commonURL +"&intitle="+URLEncoder.encode(query, "UTF-8");
 
-                } catch (UnsupportedEncodingException e) {
+
+                }
+                catch (UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
 
@@ -87,24 +102,29 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
                     try {
                         //delete older entries for the same query from the database
                         deleteOlderQueryResults(query);
-                    } catch (SQLException e) {
+                    }
+                    catch (SQLException e) {
                         e.printStackTrace();
                     }
 
-                    //feed new questions parsed from internet in the database
+                    //feed new questions parsed from internet into the database
                     new JSONParserAsyncTask().execute(queryURL);
-                } else {
+
+                }
+                else {
 
                     try {
                         offlineResultsInDatabase(query);
 
-                    } catch (SQLException e) {
+                    }
+                    catch (SQLException e) {
                         e.printStackTrace();
                     }
 
                 }
             }
             else {
+                resetListView();
                 showToast("query can not be empty");
             }
         }
@@ -120,6 +140,7 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
         List<QueryData> resultQueryDataList=queryQb.where().like(QueryData.QUERY_FIELD_NAME,"%"+query+"%").query();
 
         if(resultQueryDataList.isEmpty()) {
+            resetListView();
             showToast("No offline results in database");
         }
         else {
@@ -127,11 +148,7 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
             QueryBuilder<QuestionData,Integer> questionQb = questionDao.queryBuilder();
             List<QuestionData> questionResults = questionQb.join(queryQb).query();
             displayQueryResults(questionResults);
-
-
         }
-
-
     }
 
     private boolean isNetworkAvailable() {
@@ -162,11 +179,19 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
 
 
     }
+
+
+
     class JSONParserAsyncTask extends AsyncTask<String,String,Void>
     {
+
+        LinearLayout linearLayout = (LinearLayout) findViewById(R.id.llProgressBar);
         JSONObject jsonObject;
         String json = "";
-
+        @Override
+        protected void onPreExecute() {
+            linearLayout.setVisibility(View.VISIBLE);
+        }
         @Override
         protected Void doInBackground(String... params) {
             try {
@@ -194,84 +219,58 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
         }
 
         protected void onPostExecute(Void v){
-            try{
-                 jsonObject = new JSONObject(json);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
+
+            linearLayout.setVisibility(View.INVISIBLE);
+
         }
     }
 
     public void feedIntoDb(String json)
     {
         try {
-
-                queryDao = getHelper().getQueryRuntimeDao();
-                questionDao = getHelper().getQuestionRuntimeDao();
-                final QueryData queryData = new QueryData(query);
-                queryDao.create(queryData);
-
                 queryResult = new JSONObject(json);
                 JSONArray questions =  queryResult.getJSONArray("items");
-                for(int i=0;i<questions.length();i++) {
 
-                    JSONObject c = questions.getJSONObject(i);
-                    JSONObject owner = c.getJSONObject("owner");
-                    title=c.getString(TITLE);
-                    score=Integer.parseInt(c.getString(SCORE));
-                    author=owner.getString(AUTHOR);
-                    question_id=Integer.parseInt(c.getString(QUESTION_ID));
+                if(questions.length()>0) {
 
-                    QuestionData questionData = new QuestionData(question_id, queryData, score, author, title);
-                    questionDao.create(questionData);
+                    queryDao = getHelper().getQueryRuntimeDao();
+                    questionDao = getHelper().getQuestionRuntimeDao();
+                    QueryData queryData;
+
+                    queryData = new QueryData(query);
+                    queryDao.create(queryData);
 
 
+                    for (int i = 0; i < questions.length(); i++) {
 
+                        JSONObject c = questions.getJSONObject(i);
+                        JSONObject owner = c.getJSONObject("owner");
+                        title = c.getString(TITLE);
+                        score = Integer.parseInt(c.getString(SCORE));
+                        author = owner.getString(AUTHOR);
+                        question_id = Integer.parseInt(c.getString(QUESTION_ID));
+
+                        QuestionData questionData = new QuestionData(question_id, queryData, score, author, title);
+                        questionDao.create(questionData);
+                    }
+
+                    QueryBuilder<QuestionData, Integer> statementBuilder = questionDao.queryBuilder();
+                    statementBuilder.where().eq(QuestionData.QUERY_ID_FIELD_NAME, queryData);
+                    List<QuestionData> list = questionDao.query(statementBuilder.prepare());
+
+                    displayQueryResults(list);
+                }
+                else {
+
+                    resetListView();
+                    showToast("No results found, please enter a relevent query");
                 }
 
-
-            QueryBuilder<QuestionData, Integer> statementBuilder = questionDao.queryBuilder();
-            statementBuilder.where().eq(QuestionData.QUERY_ID_FIELD_NAME, queryData);
-            final List<QuestionData> list = questionDao.query(statementBuilder.prepare());
-
-            displayQueryResults(list);
-
-
-
-            List<QuestionData> qlist = questionDao.queryForAll();
-            StringBuilder sb = new StringBuilder();
-            sb.append("got ").append(qlist.size()).append(" entries in ").append("Question").append("\n");
-
-            // if we already have items in the database
-            int questionC = 0;
-            for (QuestionData question : qlist) {
-                sb.append("------------------------------------------\n");
-                sb.append("[").append(questionC).append("] = ").append(question.getId()+"   "+question.getQuestionId()+"  "+question.getScore()+"    "+question.getQueryId().getId() + "   "+question.getTitle()).append("\n");
-                questionC++;
-            }
-            sb.append("------------------------------------------\n");
-            Log.d("fetch",sb.toString());
-
-            List<QueryData> queryList = queryDao.queryForAll();
-            StringBuilder qsb = new StringBuilder();
-            qsb.append("got ").append(queryList.size()).append(" entries in ").append("Queries").append("\n");
-
-            // if we already have items in the database
-            int queryC = 0;
-            for (QueryData queries : queryList) {
-                qsb.append("------------------------------------------\n");
-                qsb.append("[").append(queryC).append("] = ").append(queries.getId()+"  "+queries.getQuery()).append("\n");
-                queryC++;
-            }
-            qsb.append("------------------------------------------\n");
-            Log.d("fetch",qsb.toString());
-
-
-
-
-        } catch (JSONException e) {
+        }
+        catch (JSONException e) {
             e.printStackTrace();
-        } catch (SQLException e) {
+        }
+        catch (SQLException e) {
             e.printStackTrace();
         }
 
@@ -286,14 +285,41 @@ public class MainActivity extends OrmLiteBaseActivity<DatabaseHelper> {
             public void run() {
 
                 listView.setAdapter(customAdapter);
+
             }
         });
     }
 
-    private void showToast(String string) {
-        Toast.makeText(getApplicationContext(), string, Toast.LENGTH_LONG).show();
+    private void showToast(final String string) {
+        MainActivity.this.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+
+                Toast.makeText(getApplicationContext(), string, Toast.LENGTH_LONG).show();
+            }
+
+        });
     }
 
+    private void resetListView() {
+        listView = (ListView) findViewById(R.id.questionListView);
+        MainActivity.this.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
 
+                listView.setAdapter(null);
+            }
+        });
+
+    }
+    private void hideKeyBoard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.hideSoftInputFromWindow(queryEditText.getWindowToken(), 0);
+    }
+
+    /*private void updateQueryURL() throws UnsupportedEncodingException {
+        queryURL = commonURL +"&page="+pageNo+"&pagesize="+pageSize+"&intitle="+URLEncoder.encode(query, "UTF-8");
+    }
+*/
 
 }

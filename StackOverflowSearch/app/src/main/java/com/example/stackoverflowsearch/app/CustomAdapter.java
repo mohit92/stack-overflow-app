@@ -17,12 +17,13 @@ public class CustomAdapter extends ArrayAdapter {
 
     private final Activity activity;
     private final List list;
-    //private Context context;
+
     public CustomAdapter(Activity activity, List<QuestionData> list){
         super(activity,R.layout.questions_layout,list);
         this.activity = activity;
         this.list = list;
     }
+
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
         View rowView = convertView;
